@@ -1,7 +1,10 @@
-// Version: 1.4 @1.6.22
+/*
+   Mancala Minimax implementation
+   Copyright (c) 2022 Alexander Kurtz. All rights reserved.
+   This library is distributed under the terms of the MIT License and WITHOUT ANY WARRANTY
+*/
 
 #include <iostream>
-#include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
@@ -44,7 +47,6 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
         position[selection] += 1;
     }
 
-    //TODO Optimize this eal
     if (player)
     {
         if (selection == PLAYER_SCORE)
@@ -101,7 +103,7 @@ int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8
             if (position[i] == 0)
                 continue;
             uint8_t PositionCopy[POSITION_LENGTH];
-            memcpy(PositionCopy, position, POSITION_LENGTH * sizeof(uint8_t));
+            memcpy(PositionCopy, position, POSITION_LENGTH);
             ScoreMin = std::min(ScoreMin, minimax(PositionCopy, move(PositionCopy, i, player), depth - 1, alpha, beta));
             
             if (ScoreMin <= alpha)
@@ -118,7 +120,7 @@ int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8
             if (position[i] == 0)
                 continue;
             uint8_t PositionCopy[POSITION_LENGTH];
-            memcpy(PositionCopy, position, POSITION_LENGTH * sizeof(uint8_t));
+            memcpy(PositionCopy, position, POSITION_LENGTH);
             ScoreMax = std::max(ScoreMax, minimax(PositionCopy, move(PositionCopy, i, player), depth -1, alpha, beta));
             
             if (ScoreMax >= beta)
@@ -205,19 +207,9 @@ int main()
     };
 
     bool player = true;
-    int cache = 0;
+    int cacheResult;
+    int inputMove;
     std::string input;
-
-    /* ! BENCHMARKING CODE ! 
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    minimaxRoot(position, true, 18);
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count() << "[ns]" << std::endl;
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::seconds> (end - begin).count() << "[s]" << std::endl;
-    
-    std::cin.get();    
-    */
 
     std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
     print(position);
@@ -226,22 +218,21 @@ int main()
     {
         if (!player)
         {
-            cache = minimaxRoot(position, player, 15);
-            std::cout << "Calculated move: " << (player ? cache : 12 - cache) << std::endl;
-            player = move(position, cache, player);
+            cacheResult = minimaxRoot(position, player, 14);
+            std::cout << "Calculated move: " << (player ? cacheResult : 12 - cacheResult) << std::endl;
+            player = move(position, cacheResult, player);
         }
         else
         {
-            /*
-            cache = minimaxRoot(position, player, 7);
-            std::cout << "Calculated move: " << (player ? cache : 12 - cache) << std::endl;
-            player = move(position, cache, player);
-            */
-            
             std::cout << "Move:";
             std::cin >> input;
-            player = move(position, stoi(input), player);
-            
+
+            inputMove = stoi(input);
+
+            if (0 <= inputMove < 6 && position[inputMove] > 0)
+                player = move(position, inputMove, player);
+            else
+                std::cout << "Invalid Input!" << std::endl;
         }
         std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
         print(position);
