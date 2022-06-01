@@ -1,3 +1,5 @@
+// Version: 1.4 @1.6.22
+
 #include <iostream>
 #include <chrono>
 #include <string>
@@ -8,16 +10,26 @@
 #define PLAYER_SCORE 6
 #define COMPUTER_SCORE 13
 
+/* Check wether all of "Players" or "Computer" array fields are 0 */
 #define PlayerEmpty(position) !(*(int64_t*)position & 0x0000FFFFFFFFFFFF)
 #define ComputerEmpty(position) !(*(int64_t*)(position+7) & 0x0000FFFFFFFFFFFF)
+/* Evaluation for position */
 #define Evaluation(position) position[COMPUTER_SCORE] - position[PLAYER_SCORE]
 
 /* 
-Player is always the one in the front range of the array
-so that the argument player can be passed in regardless whose
-side is which
+Design:
+    Player/Computer:
+        Roles are allocated statically -> Players fields are always 0 - 6 while Computer is always 7 - 13
+        The "Player/Computer" terms are mearly for understanding sake, for example "move" returns which "player's" turn
+        it is next via player boolean.
+        There is free choice which agent gets which "role", you can just make the minimax agent the "player" for example.
 
-Evaluation is Computer positive, Player negative
+    Tree-Search:
+        Minimax implementation
+        Evaluation is "Computer" positive
+
+    Multithreading:
+        Each minimax root call (calculation for each viable FIRST move) is handed of to a seperate threads
 */
 
 bool move(uint8_t* position, uint8_t selection, bool& player)
@@ -29,13 +41,10 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
     {
         selection += 1;
         selection = selection % POSITION_LENGTH;
-
         position[selection] += 1;
     }
 
-
     //TODO Optimize this eal
-    // Check for "special events" - Capture and Extra move
     if (player)
     {
         if (selection == PLAYER_SCORE)
@@ -64,7 +73,7 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
 
 int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8_t beta)
 {
-    // If player has no more stones get final score and return
+    /* Branch terminating events */
     if (PlayerEmpty(position))
     { 
         for (int i = 7; i < 13; i++)
@@ -83,6 +92,7 @@ int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8
         return Evaluation(position);
     }
 
+    /* Extend branch */
     if (player)
     {
         int8_t ScoreMin = 127;
@@ -195,10 +205,10 @@ int main()
     };
 
     bool player = true;
-    int itteration = 0;
     int cache = 0;
     std::string input;
 
+    /* ! BENCHMARKING CODE ! 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     minimaxRoot(position, true, 18);
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -207,13 +217,13 @@ int main()
     std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::seconds> (end - begin).count() << "[s]" << std::endl;
     
     std::cin.get();    
+    */
 
     std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
     print(position);
 
     while (!PlayerEmpty(position) && !ComputerEmpty(position))
     {
-        itteration += 1;
         if (!player)
         {
             cache = minimaxRoot(position, player, 15);
@@ -238,7 +248,6 @@ int main()
         
         std::cout << " <----<---<-<>->--->---->" << std::endl;
     }
-    std::cout << std::endl << "Total turns: " << itteration << std::endl << std::endl;
 
     if (PlayerEmpty(position))
     {
