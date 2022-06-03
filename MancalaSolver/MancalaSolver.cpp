@@ -1,7 +1,7 @@
 /*
    Mancala Minimax implementation
    Copyright (c) 2022 Alexander Kurtz. All rights reserved.
-   This library is distributed under the terms of the MIT License and WITHOUT ANY WARRANTY
+   This code is distributed under the terms of the MIT License and WITHOUT ANY WARRANTY
 */
 
 #include <iostream>
