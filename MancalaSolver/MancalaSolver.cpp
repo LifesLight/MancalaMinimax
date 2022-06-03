@@ -1,13 +1,12 @@
 /*
    Mancala Minimax implementation
    Copyright (c) 2022 Alexander Kurtz. All rights reserved.
-   This library is distributed under the terms of the MIT License and WITHOUT ANY WARRANTY
+   This code is distributed under the terms of the MIT License and WITHOUT ANY WARRANTY
 */
 
 #include <iostream>
 #include <string>
 #include <thread>
-#include <vector>
 
 #define POSITION_LENGTH 14
 #define PLAYER_SCORE 6
@@ -35,18 +34,31 @@ Design:
         Each minimax root call (calculation for each viable FIRST move) is handed of to a seperate threads
 */
 
+/* 
+Move function simulates the "playing" of a field on the "position" board. 
+Requires info on whose turn the simulation is supposed to be.
+It returns whose turn it is next.
+*/
 bool move(uint8_t* position, uint8_t selection, bool& player)
 {
+    /* Store "to be distributed" stone count and clear selected field */
     unsigned char count = position[selection];
     position[selection] = 0;
-
+    /* For the amount of stones to be distributed, go trough board position array and add one stone per field */
     for (count ; count > 0; count--)
     {
         selection += 1;
         selection = selection % POSITION_LENGTH;
-        position[selection] += 1;
+        /* Skip enemy "Score" fields */
+        if (selection == (player ? COMPUTER_SCORE : PLAYER_SCORE))
+            count += 1;
+        else    
+            position[selection] += 1;
     }
-
+    /*
+    Check for capture (taking stones from enemy side).
+    Checking whose turn it is next and returning that
+    */
     if (player)
     {
         if (selection == PLAYER_SCORE)
@@ -73,9 +85,17 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
     }
 }
 
+/*
+Tree-Search
+Adapted to work with variable turn orders.
+Recursive.
+Returns the static evaluation of its children.
+Optimizing for root "player" call.
+*/
 int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8_t beta)
 {
     /* Branch terminating events */
+    /* If terminal return evaluation */
     if (PlayerEmpty(position))
     { 
         for (int i = 7; i < 13; i++)
@@ -88,50 +108,62 @@ int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8
             position[PLAYER_SCORE] += position[i];
         return Evaluation(position);
     }
-
     if (depth == 0)
     {
         return Evaluation(position);
     }
 
     /* Extend branch */
+    /* Each possible move is a new child */
+    int8_t ScoreReference;
+    /* Maximize/Minimize evaluation depending on who is being optimized */
     if (player)
     {
-        int8_t ScoreMin = 127;
+        /* Reference score is worst possible for lowest possible score */
+        ScoreReference = 127;
         for (int i = 0; i < 6; i++)
         {
+            /* Don't create child if the target field is empty, so not a viable move */
             if (position[i] == 0)
                 continue;
+            /* Create independent duplicate of board "position" for child */
             uint8_t PositionCopy[POSITION_LENGTH];
             memcpy(PositionCopy, position, POSITION_LENGTH);
-            ScoreMin = std::min(ScoreMin, minimax(PositionCopy, move(PositionCopy, i, player), depth - 1, alpha, beta));
-            
-            if (ScoreMin <= alpha)
+            /* Recursive call, optimizing for whoever move returned next move too */
+            ScoreReference = std::min(ScoreReference, minimax(PositionCopy, move(PositionCopy, i, player), depth - 1, alpha, beta));
+            /* Alpha-Beta breakoff condition */
+            if (ScoreReference <= alpha)
                 break;
-            beta = std::min(ScoreMin, beta);
-        }
-        return ScoreMin;
+            /* Update Beta value */
+            beta = std::min(ScoreReference, beta);
+        }      
     }
     else
     {
-        int8_t ScoreMax = -128;
+        /* Reference score is worst possible for highest possible score */
+        ScoreReference = -128;
         for (int i = 7; i < 13; i++)
         {
             if (position[i] == 0)
                 continue;
             uint8_t PositionCopy[POSITION_LENGTH];
             memcpy(PositionCopy, position, POSITION_LENGTH);
-            ScoreMax = std::max(ScoreMax, minimax(PositionCopy, move(PositionCopy, i, player), depth -1, alpha, beta));
+            ScoreReference = std::max(ScoreReference, minimax(PositionCopy, move(PositionCopy, i, player), depth -1, alpha, beta));
             
-            if (ScoreMax >= beta)
+            if (ScoreReference >= beta)
                 break;
-            alpha = std::max(ScoreMax, alpha);
-            
+            alpha = std::max(ScoreReference, alpha);
         }
-        return ScoreMax;
     }
+
+    /* Return evaluation of children */
+    return ScoreReference;
 }
 
+/* 
+Function for individual threads to call, takes "firstMove" argument which determines which 
+first branch the thread should search.
+*/
 void minimaxThreadCall(int8_t* target,uint8_t firstMove, uint8_t* position, bool player, uint8_t depth)
 {
     uint8_t PositionCopy[POSITION_LENGTH];
@@ -139,26 +171,28 @@ void minimaxThreadCall(int8_t* target,uint8_t firstMove, uint8_t* position, bool
     *target = minimax(PositionCopy, move(PositionCopy, firstMove, player), depth - 1, -128, 127);
 }
 
+/* Tree-Search root call, returns best possible move with consideration of "depth" amount next moves */
 int8_t minimaxRoot(uint8_t* position, bool player, uint8_t depth)
 {
-    std::vector <std::thread*> workers;
-    std::vector <int8_t*> results;
+    std::thread* workers[6];
+    int8_t* results[6];
 
     for (int i = 0; i < 6; i++)
     {
         if (position[player ? i : i + 7] == 0)
         {
-            results.push_back(nullptr);
+            results[i] = nullptr;
             continue;
         }      
         int8_t* result = new int8_t;
         std::thread* worker = new std::thread(minimaxThreadCall,result, player ? i : i + 7, position, player, depth);
-        workers.push_back(worker);
-        results.push_back(result);
+        workers[i] = worker;
+        results[i] = result;
     }
-    for (std::thread* i : workers)
+    for (int i = 0; i < 6; i++)
     {
-        i->join();
+        if (results[i] != nullptr)
+            workers[i]->join();
     }
     int8_t score = player ? 127 : -128;
     uint8_t bestIndex;
@@ -179,13 +213,10 @@ int8_t minimaxRoot(uint8_t* position, bool player, uint8_t depth)
     }
     
     std::cout << "Evaluation: " << (player ? +score : +(-score)) << std::endl;
-
-    workers.clear();
-    results.clear();
-
     return bestIndex;
 }
 
+/* Print the board "position" */
 void print(unsigned char* position)
 {
     for (int i = COMPUTER_SCORE; i > PLAYER_SCORE - 1; i--)
@@ -198,6 +229,7 @@ void print(unsigned char* position)
 
 int main()
 {
+    /* Start board "position" layout */
     uint8_t position[POSITION_LENGTH]
     {
         4,4,4,4,4,4,
@@ -205,8 +237,9 @@ int main()
         4,4,4,4,4,4,
         0
     };
-
+    /* Who starts */
     bool player = true;
+
     int cacheResult;
     int inputMove;
     std::string input;
@@ -259,5 +292,13 @@ int main()
     }
 
     print(position);
+
+    if (position[PLAYER_SCORE] > position[COMPUTER_SCORE])
+        std::cout << "PLAYER WON!" << std::endl;
+    else if (position[PLAYER_SCORE] < position[COMPUTER_SCORE])
+        std::cout << "COMPUTER WON!" << std::endl;
+    else
+        std::cout << "DRAW!" << std::endl;
+
     std::cin.get();
 }
