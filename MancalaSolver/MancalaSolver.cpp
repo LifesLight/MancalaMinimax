@@ -7,6 +7,13 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <ctime>
+#include <ctype.h>
+/* If compiled on Windows, enable colored console output */
+#ifdef _WIN32
+    #define NOMINMAX
+    #include <Windows.h>
+#endif
 
 #define POSITION_LENGTH 14
 #define PLAYER_SCORE 6
@@ -189,13 +196,14 @@ int8_t minimaxRoot(uint8_t* position, bool player, uint8_t depth)
         workers[i] = worker;
         results[i] = result;
     }
+
     for (int i = 0; i < 6; i++)
-    {
         if (results[i] != nullptr)
             workers[i]->join();
-    }
+
     int8_t score = player ? 127 : -128;
     uint8_t bestIndex;
+
     for (int i = 0; i < 6; i++)
     {
         if (results[i] == nullptr)
@@ -211,94 +219,235 @@ int8_t minimaxRoot(uint8_t* position, bool player, uint8_t depth)
             bestIndex = i + 7;
         }
     }
-    
-    std::cout << "Evaluation: " << (player ? +score : +(-score)) << std::endl;
+
+#ifdef _WIN32
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    std::cout << "Evaluation: ";
+    SetConsoleTextAttribute(hConsole, (score > 0) ? 4 : 9);
+    std::cout << (player ? +(-score) : +score) << std::endl;
+    SetConsoleTextAttribute(hConsole, 7);
+#else
+    std::cout << "Evaluation: " << (player ? +(-score) : +score) << std::endl;
+#endif
     return bestIndex;
 }
 
 /* Print the board "position" */
 void print(unsigned char* position)
 {
-    for (int i = COMPUTER_SCORE; i > PLAYER_SCORE - 1; i--)
+#ifdef _WIN32
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
+    SetConsoleTextAttribute(hConsole, 4);
+    std::cout << std::setw(3) << +position[COMPUTER_SCORE];
+    SetConsoleTextAttribute(hConsole, 7);
+#else
+    std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
+    std::cout << std::setw(3) << +position[COMPUTER_SCORE];
+#endif
+    for (int i = COMPUTER_SCORE - 1; i > PLAYER_SCORE; i--)
         std::cout << std::setw(3) << + position[i];
-    std::cout << std::endl << "   ";
+#ifdef _WIN32
+    SetConsoleTextAttribute(hConsole, 9);
+    std::cout << std::setw(3) << +position[PLAYER_SCORE] << std::endl << "   ";
+    SetConsoleTextAttribute(hConsole, 7);
+#else
+    std::cout << std::setw(3) << +position[PLAYER_SCORE] << std::endl << "   ";
+#endif
     for (int i = 0; i < PLAYER_SCORE; i++)
         std::cout << std::setw(3) << +position[i];
     std::cout << std::endl;
 }
 
-int main()
+/* 
+Agent class
+Stores agent settings and contains move function for each type
+Types:
+    Random Agent = "random"
+    Human Player Agent = "player"
+    Minimax Agent = "computer"
+*/
+class Agent
 {
-    /* Start board "position" layout */
-    uint8_t position[POSITION_LENGTH]
+private:
+    std::string type;
+    uint8_t depth;
+public:
+    Agent(std::string type)
+        : type(type), depth(12)
+    {}
+
+    Agent(std::string type, uint8_t depth)
+        : type(type), depth(depth)
+    {}
+
+    void Move(uint8_t* board, bool& turn)
+    {
+        /* Minimax */
+        if (type == "computer")
+        {
+            uint8_t cacheResult = minimaxRoot(board, turn, depth);
+            std::cout << "Calculated move: " << (turn ? cacheResult : 12 - cacheResult) << std::endl;
+            turn = move(board, cacheResult, turn);
+        }
+        /* Human player */
+        else if (type == "player")
+        {
+            std::string input;
+            uint8_t inputMove;
+            std::cout << "Move:";
+            std::cin >> input;
+            inputMove = stoi(input);
+            if (0 <= inputMove && inputMove < 6 && board[turn ? inputMove : 12 - inputMove] > 0)
+                turn = move(board, turn ? inputMove : 12 - inputMove, turn);
+            else
+                std::cout << "Invalid Input!" << std::endl;
+        }
+        /* Random */
+        else
+        {
+            while (true)
+            {
+                uint8_t selection = std::rand() % 6;
+                if (board[turn ? selection : 12 - selection] > 0)
+                {
+                    std::cout << "Random move: " << +(turn ? 12 - selection : selection) << std::endl;
+                    turn = move(board, turn ? selection : 12 - selection, turn);
+                    break;
+                }
+            }
+        }
+    }
+};
+
+/*
+Game loop container
+Supports random position, custom start position, start selection
+and all combinations of different agents playing against each other
+*/
+class Environment
+{
+private:
+    bool turn;
+    Agent agent1;
+    Agent agent2;
+    uint8_t* position = new uint8_t[POSITION_LENGTH]
     {
         4,4,4,4,4,4,
         0,
         4,4,4,4,4,4,
         0
     };
-    /* Who starts */
-    bool player = true;
 
-    int cacheResult;
-    int inputMove;
-    std::string input;
+public:
+    Environment(Agent player1, Agent player2, bool playerStart, uint8_t board[])
+        : position(board), turn(playerStart), agent1(player1), agent2(player2)
+    {}
+    
+    Environment(Agent player1, Agent player2, bool playerStart)
+        : turn(playerStart), agent1(player1), agent2(player2)
+    {}
 
-    std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
-    print(position);
+    Environment(Agent player1, Agent player2)
+        : turn(true), agent1(player1), agent2(player2)
+    {}
 
-    while (!PlayerEmpty(position) && !ComputerEmpty(position))
+    ~Environment()
     {
-        if (!player)
-        {
-            cacheResult = minimaxRoot(position, player, 14);
-            std::cout << "Calculated move: " << (player ? cacheResult : 12 - cacheResult) << std::endl;
-            player = move(position, cacheResult, player);
-        }
-        else
-        {
-            std::cout << "Move:";
-            std::cin >> input;
-
-            inputMove = stoi(input);
-
-            if (0 <= inputMove < 6 && position[inputMove] > 0)
-                player = move(position, inputMove, player);
-            else
-                std::cout << "Invalid Input!" << std::endl;
-        }
-        std::cout << "   < 0--1--2--3--4--5 >" << std::endl;
-        print(position);
-        
-        std::cout << " <----<---<-<>->--->---->" << std::endl;
+        delete[] position;
     }
 
-    if (PlayerEmpty(position))
+private:
+    /* Randomize position with "StoneCount" amount of stones per side */
+    void p_RandomizePosition(uint8_t StoneCount)
     {
-        for (int i = 7; i < 13; i++)
-        {
-            position[COMPUTER_SCORE] += position[i];
+        std::srand((unsigned int)std::time(nullptr));
+
+        for (int i = 0; i < POSITION_LENGTH; i++)
             position[i] = 0;
-        }
-    }
 
-    if (ComputerEmpty(position))
-    {
+        for (int i = 0; i < StoneCount; i++)
+            position[std::rand() % 6] += 1;
+
         for (int i = 0; i < 6; i++)
-        {
-            position[PLAYER_SCORE] += position[i];
-            position[i] = 0;
-        }
+            position[PLAYER_SCORE + i + 1] = position[i];
     }
 
-    print(position);
+public:
+    void RandomizePosition()
+    { 
+        p_RandomizePosition(4 * 6);
+    }
+    void RandomizePosition(uint8_t stoneCount)
+    {
+        p_RandomizePosition(stoneCount);
+    }
 
-    if (position[PLAYER_SCORE] > position[COMPUTER_SCORE])
-        std::cout << "PLAYER WON!" << std::endl;
-    else if (position[PLAYER_SCORE] < position[COMPUTER_SCORE])
-        std::cout << "COMPUTER WON!" << std::endl;
-    else
-        std::cout << "DRAW!" << std::endl;
+    /* Start game loop */
+    void start()
+    {
+        /*
+        Check for too many stones, warning at > 127, not 255 since the evaluation is int8_t 
+        so if not using minimax everything until 255 should work
+        */
+        int count = 0;
+        for (int i = 0; i < POSITION_LENGTH; i++)
+            count += position[i];
+        if (count > 127)
+            std::cout << "[WARNING]: Too many stones on field! -> Risk of variable overflow!" << std::endl;
 
-    std::cin.get();
+        print(position);
+        while (!PlayerEmpty(position) && !ComputerEmpty(position))
+        {
+            std::cout << " <----<---<-<>->--->---->" << std::endl;
+            if (turn)
+            {
+                std::cout << "AGENT 1" << std::endl;
+                agent1.Move(position, turn);
+            } 
+            else
+            {
+                std::cout << "AGENT 2" << std::endl;
+                agent2.Move(position, turn);
+            }
+                
+            print(position);
+        }
+
+        std::cout << " <----<---<-<>->--->---->" << std::endl;
+
+        if (PlayerEmpty(position))
+        {
+            for (int i = 7; i < 13; i++)
+            {
+                position[COMPUTER_SCORE] += position[i];
+                position[i] = 0;
+            }
+        }
+
+        if (ComputerEmpty(position))
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                position[PLAYER_SCORE] += position[i];
+                position[i] = 0;
+            }
+        }
+
+        print(position);
+
+        if (position[PLAYER_SCORE] > position[COMPUTER_SCORE])
+            std::cout << "AGENT 1 WON" << std::endl;
+        else if (position[PLAYER_SCORE] < position[COMPUTER_SCORE])
+            std::cout << "AGENT 2 WON" << std::endl;
+        else
+            std::cout << "DRAW!" << std::endl;
+    }
+};
+
+int main()
+{
+    Environment game(Agent("player"), Agent("computer", 16), true);
+    //game.RandomizePosition();
+    game.start();
 }
