@@ -8,7 +8,6 @@
 #include <string>
 #include <thread>
 #include <ctime>
-#include <ctype.h>
 /* If compiled on Windows, enable colored console output */
 #ifdef _WIN32
     #define NOMINMAX
@@ -306,6 +305,7 @@ public:
         /* Random */
         else
         {
+            std::srand((unsigned int)std::time(nullptr));
             while (true)
             {
                 uint8_t selection = std::rand() % 6;
