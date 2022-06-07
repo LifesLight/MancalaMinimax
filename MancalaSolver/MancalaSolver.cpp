@@ -41,9 +41,9 @@ Design:
 */
 
 /* 
-Move function simulates the "playing" of a field on the "position" board. 
-Requires info on whose turn the simulation is supposed to be.
-It returns whose turn it is next.
+    Move function simulates the "playing" of a field on the "position" board. 
+    Requires info on whose turn the simulation is supposed to be.
+    It returns whose turn it is next.
 */
 bool move(uint8_t* position, uint8_t selection, bool& player)
 {
@@ -62,8 +62,8 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
             position[selection] += 1;
     }
     /*
-    Check for capture (taking stones from enemy side).
-    Checking whose turn it is next and returning that
+        Check for capture (taking stones from enemy side).
+        Checking whose turn it is next and returning that
     */
     if (player)
     {
@@ -92,11 +92,11 @@ bool move(uint8_t* position, uint8_t selection, bool& player)
 }
 
 /*
-Tree-Search
-Adapted to work with variable turn orders.
-Recursive.
-Returns the static evaluation of its children.
-Optimizing for root "player" call.
+    Tree-Search
+    Adapted to work with variable turn orders.
+    Recursive.
+    Returns the static evaluation of its children.
+    Optimizing for root "player" call.
 */
 int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8_t beta)
 {
@@ -167,8 +167,8 @@ int8_t minimax(uint8_t* position, bool player, uint8_t depth, int8_t alpha, int8
 }
 
 /* 
-Function for individual threads to call, takes "firstMove" argument which determines which 
-first branch the thread should search.
+    Function for individual threads to call, takes "firstMove" argument which determines which 
+    first branch the thread should search.
 */
 void minimaxThreadCall(int8_t* target,uint8_t firstMove, uint8_t* position, bool player, uint8_t depth)
 {
@@ -311,7 +311,7 @@ public:
                 uint8_t selection = std::rand() % 6;
                 if (board[turn ? selection : 12 - selection] > 0)
                 {
-                    std::cout << "Random move: " << +(turn ? 12 - selection : selection) << std::endl;
+                    std::cout << "Random move: " << +selection << std::endl;
                     turn = move(board, turn ? selection : 12 - selection, turn);
                     break;
                 }
@@ -321,9 +321,9 @@ public:
 };
 
 /*
-Game loop container
-Supports random position, custom start position, start selection
-and all combinations of different agents playing against each other
+    Game loop container
+    Supports random position, custom start position, start selection
+    and all combinations of different agents playing against each other
 */
 class Environment
 {
